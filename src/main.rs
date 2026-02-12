@@ -1,6 +1,8 @@
+use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 mod commands;
+mod utils;
 
 #[derive(Subcommand, Debug)]
 enum Commands {
@@ -14,9 +16,9 @@ struct Cli {
     command: Commands,
 }
 
-fn main() {
+fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Commands::SetRepository(args) => commands::set_repository::set_repository(args),
+        Commands::SetRepository(ref args) => commands::set_repository::set_repository(args),
     }
 }
