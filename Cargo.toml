@@ -8,5 +8,6 @@ edition = "2024"
 anyhow = "1.0.101"
 clap = { version = "4.5.57", features = ["derive"] }
 directories = "6.0.0"
+relative-path = { version = "2.0.1", features = ["serde"] }
 serde = { version = "1.0.228", features = ["derive"] }
 toml = "1.0.0"

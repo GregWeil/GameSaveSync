@@ -4,15 +4,11 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use super::paths::config_dir;
-
-#[derive(Serialize, Deserialize, Default, Debug)]
-pub struct RepositoryConfig {
-    pub path: PathBuf,
-}
+use crate::repository::AnyRepositoryConfig;
 
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct Config {
-    pub repository: Option<RepositoryConfig>,
+    pub repository: Option<AnyRepositoryConfig>,
 }
 
 fn config_path() -> Result<PathBuf> {
