@@ -1,5 +1,3 @@
-use core::fmt;
-
 use anyhow::Result;
 use relative_path::{RelativePath, RelativePathBuf};
 use serde::{Deserialize, Serialize};
@@ -10,10 +8,10 @@ pub enum AnyRepositoryConfig {
     Local(super::local_repository::LocalRepositoryConfig),
 }
 
-impl fmt::Display for AnyRepositoryConfig {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl std::fmt::Display for AnyRepositoryConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            AnyRepositoryConfig::Local(config) => config.fmt(f),
+            AnyRepositoryConfig::Local(config) => write!(f, "{}", config),
         }
     }
 }
@@ -24,36 +22,48 @@ pub enum AnyRepository {
 }
 
 impl super::Repository for AnyRepository {
-    fn is_file(&self, path: &RelativePath) -> Result<bool> {
+    fn is_file<P>(&self, path: P) -> Result<bool>
+    where
+        P: AsRef<RelativePath>,
+    {
         match self {
-            AnyRepository::Local(repository) => repository.is_file(&path),
+            AnyRepository::Local(repository) => repository.is_file(path),
         }
     }
 
-    fn is_dir(&self, path: &RelativePath) -> Result<bool> {
+    fn is_dir<P>(&self, path: P) -> Result<bool>
+    where
+        P: AsRef<RelativePath>,
+    {
         match self {
-            AnyRepository::Local(repository) => repository.is_dir(&path),
+            AnyRepository::Local(repository) => repository.is_dir(path),
         }
     }
 
-    fn read_dir(
-        &self,
-        path: &RelativePath,
-    ) -> Result<impl Iterator<Item = Result<RelativePathBuf>>> {
+    fn read_dir<P>(&self, path: P) -> Result<impl Iterator<Item = Result<RelativePathBuf>>>
+    where
+        P: AsRef<RelativePath>,
+    {
         match self {
-            AnyRepository::Local(repository) => repository.read_dir(&path),
+            AnyRepository::Local(repository) => repository.read_dir(path),
         }
     }
 
-    fn read_string(&self, path: &RelativePath) -> Result<String> {
+    fn read_string<P>(&self, path: P) -> Result<String>
+    where
+        P: AsRef<RelativePath>,
+    {
         match self {
-            AnyRepository::Local(repository) => repository.read_string(&path),
+            AnyRepository::Local(repository) => repository.read_string(path),
         }
     }
 
-    fn write_string(&self, path: &RelativePath, content: &str) -> Result<()> {
+    fn write_string<P>(&self, path: P, content: &str) -> Result<()>
+    where
+        P: AsRef<RelativePath>,
+    {
         match self {
-            AnyRepository::Local(repository) => repository.write_string(&path, content),
+            AnyRepository::Local(repository) => repository.write_string(path, content),
         }
     }
 }

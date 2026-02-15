@@ -1,4 +1,3 @@
-use core::fmt;
 use std::path::PathBuf;
 
 use anyhow::{Context, Error, Result};
@@ -12,9 +11,9 @@ pub struct LocalRepositoryConfig {
     pub path: PathBuf,
 }
 
-impl fmt::Display for LocalRepositoryConfig {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.path.display().fmt(f)
+impl std::fmt::Display for LocalRepositoryConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.path.display())
     }
 }
 
@@ -24,21 +23,27 @@ pub struct LocalRepository {
 }
 
 impl Repository for LocalRepository {
-    fn is_file(&self, path: &RelativePath) -> Result<bool> {
-        let path = path.to_path(&self.path);
+    fn is_file<P>(&self, path: P) -> Result<bool>
+    where
+        P: AsRef<RelativePath>,
+    {
+        let path = path.as_ref().to_path(&self.path);
         Ok(path.is_file())
     }
 
-    fn is_dir(&self, path: &RelativePath) -> Result<bool> {
-        let path = path.to_path(&self.path);
+    fn is_dir<P>(&self, path: P) -> Result<bool>
+    where
+        P: AsRef<RelativePath>,
+    {
+        let path = path.as_ref().to_path(&self.path);
         Ok(path.is_dir())
     }
 
-    fn read_dir(
-        &self,
-        path: &RelativePath,
-    ) -> Result<impl Iterator<Item = Result<RelativePathBuf>>> {
-        let path = path.to_path(&self.path);
+    fn read_dir<P>(&self, path: P) -> Result<impl Iterator<Item = Result<RelativePathBuf>>>
+    where
+        P: AsRef<RelativePath>,
+    {
+        let path = path.as_ref().to_path(&self.path);
         Ok(path
             .read_dir()
             .with_context(|| format!("failed to enumerate {}", path.display()))?
@@ -54,13 +59,19 @@ impl Repository for LocalRepository {
             }))
     }
 
-    fn read_string(&self, path: &RelativePath) -> Result<String> {
-        let path = path.to_path(&self.path);
+    fn read_string<P>(&self, path: P) -> Result<String>
+    where
+        P: AsRef<RelativePath>,
+    {
+        let path = path.as_ref().to_path(&self.path);
         std::fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))
     }
 
-    fn write_string(&self, path: &RelativePath, content: &str) -> Result<()> {
-        let path = path.to_path(&self.path);
+    fn write_string<P>(&self, path: P, content: &str) -> Result<()>
+    where
+        P: AsRef<RelativePath>,
+    {
+        let path = path.as_ref().to_path(&self.path);
         std::fs::create_dir_all(&path)?;
         std::fs::write(&path, &content)?;
         Ok(())

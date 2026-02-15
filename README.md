@@ -30,11 +30,12 @@ The sync command might get called before and after the game by inserting it into
 - Identify save conflicts if local saves and the repository have both changed
 - Lots of error checking and logging for conflicts
 - Use the [Ludusavi Manifest](https://github.com/mtkennerly/ludusavi-manifest) for easy game registration
+- Automated testing
 
 ## Potential Features
 
 - A nice GUI with all of the CLI functionality
-- Synchronize save files/folders across windows-native and linux-native builds of a game - Will need investigation on how to identify compatible paths
+- Synchronize save files/folders across windows-native and linux-native builds of a game
 - Come up with a more interesting name
 
 ## Not Planned Features
