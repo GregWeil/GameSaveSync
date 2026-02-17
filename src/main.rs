@@ -17,8 +17,5 @@ struct Cli {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    match cli.command {
-        Commands::SetRepository(ref args) => commands::set_repository::set_repository(args),
-        Commands::List => commands::list::list(),
-    }
+    commands::exec(&cli.command)
 }
