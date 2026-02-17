@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Args;
 
-use crate::{games, repository::get_repository, utils::config};
+use crate::{games::definition, repository::get_repository, utils::config};
 
 #[derive(Args, Debug)]
 pub struct ShowArgs {
@@ -12,7 +12,7 @@ pub struct ShowArgs {
 pub fn show(args: &ShowArgs) -> Result<()> {
     let config = config::load().with_context(|| "failed to load config")?;
     let repository = get_repository(&config.repository)?;
-    let definition = games::load_definition(&repository, &args.game)?;
+    let definition = definition::load_definition(&repository, &args.game)?;
     println!("Name: {}", &definition.name);
     println!("Platform: {}", &definition.platform);
     if definition.paths.is_empty() {
