@@ -1,7 +1,11 @@
 use anyhow::{Context, Result};
 use clap::Args;
 
-use crate::{games::definition, repository::get_repository, utils::config};
+use crate::{
+    games::{self, definition, paths},
+    repository::get_repository,
+    utils::config,
+};
 
 #[derive(Args, Debug)]
 pub struct ShowArgs {
@@ -21,6 +25,10 @@ pub fn show(args: &ShowArgs) -> Result<()> {
         println!("Save Paths:");
         for path in definition.paths {
             println!("\t{}", path.path);
+            match games::paths::rewrite_path(&path.path) {
+                Ok(rewritten) => println!("\t\t➙ {}", rewritten.display()),
+                Err(error) => println!("\t\t⇢ {}", error),
+            }
         }
     }
     Ok(())

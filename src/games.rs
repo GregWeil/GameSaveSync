@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub mod definition;
+pub mod paths;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum GamePlatform {

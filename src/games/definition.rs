@@ -1,5 +1,5 @@
 use anyhow::{Context, Error, Result};
-use relative_path::{RelativePath, RelativePathBuf};
+use relative_path::RelativePath;
 use serde::{Deserialize, Serialize};
 
 use super::GamePlatform;
@@ -9,7 +9,7 @@ const DEFINITION_FILE: &str = "definition.toml";
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GameDefinitionPath {
-    pub path: RelativePathBuf,
+    pub path: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

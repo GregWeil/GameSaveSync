@@ -1,4 +1,4 @@
-use std::{fs, io::ErrorKind::NotFound, path::PathBuf};
+use std::{fs, io::ErrorKind::NotFound};
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
