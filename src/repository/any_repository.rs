@@ -22,46 +22,34 @@ pub enum AnyRepository {
 }
 
 impl super::Repository for AnyRepository {
-    fn is_file<P>(&self, path: P) -> Result<bool>
-    where
-        P: AsRef<RelativePath>,
-    {
+    fn is_file(&self, path: &RelativePath) -> Result<bool> {
         match self {
             AnyRepository::Local(repository) => repository.is_file(path),
         }
     }
 
-    fn is_dir<P>(&self, path: P) -> Result<bool>
-    where
-        P: AsRef<RelativePath>,
-    {
+    fn is_dir(&self, path: &RelativePath) -> Result<bool> {
         match self {
             AnyRepository::Local(repository) => repository.is_dir(path),
         }
     }
 
-    fn read_dir<P>(&self, path: P) -> Result<impl Iterator<Item = Result<RelativePathBuf>>>
-    where
-        P: AsRef<RelativePath>,
-    {
+    fn read_dir(
+        &self,
+        path: &RelativePath,
+    ) -> Result<impl Iterator<Item = Result<RelativePathBuf>>> {
         match self {
             AnyRepository::Local(repository) => repository.read_dir(path),
         }
     }
 
-    fn read_string<P>(&self, path: P) -> Result<String>
-    where
-        P: AsRef<RelativePath>,
-    {
+    fn read_string(&self, path: &RelativePath) -> Result<String> {
         match self {
             AnyRepository::Local(repository) => repository.read_string(path),
         }
     }
 
-    fn write_string<P>(&self, path: P, content: &str) -> Result<()>
-    where
-        P: AsRef<RelativePath>,
-    {
+    fn write_string(&self, path: &RelativePath, content: &str) -> Result<()> {
         match self {
             AnyRepository::Local(repository) => repository.write_string(path, content),
         }

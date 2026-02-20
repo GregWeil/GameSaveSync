@@ -24,11 +24,11 @@ pub struct GameDefinition {
 pub fn list_definitions(repository: &impl Repository) -> Result<Vec<String>> {
     let mut games: Vec<String> = vec![];
     let items = repository
-        .read_dir("")
+        .read_dir(RelativePath::new(""))
         .with_context(|| "failed to iterate repository")?;
     for path in items {
         let path = path?;
-        if repository.is_file(path.join(DEFINITION_FILE))? {
+        if repository.is_file(&path.join(DEFINITION_FILE))? {
             match path.file_name() {
                 Some(name) => games.push(name.into()),
                 None => unreachable!("read_dir should never return an empty path"),

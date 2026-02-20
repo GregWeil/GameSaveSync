@@ -7,21 +7,14 @@ pub mod local_repository;
 pub use any_repository::{AnyRepository, AnyRepositoryConfig};
 
 pub trait Repository {
-    fn is_file<P>(&self, path: P) -> Result<bool>
-    where
-        P: AsRef<RelativePath>;
-    fn is_dir<P>(&self, path: P) -> Result<bool>
-    where
-        P: AsRef<RelativePath>;
-    fn read_dir<P>(&self, path: P) -> Result<impl Iterator<Item = Result<RelativePathBuf>>>
-    where
-        P: AsRef<RelativePath>;
-    fn read_string<P>(&self, path: P) -> Result<String>
-    where
-        P: AsRef<RelativePath>;
-    fn write_string<P>(&self, path: P, content: &str) -> Result<()>
-    where
-        P: AsRef<RelativePath>;
+    fn is_file(&self, path: &RelativePath) -> Result<bool>;
+    fn is_dir(&self, path: &RelativePath) -> Result<bool>;
+    fn read_dir(
+        &self,
+        path: &RelativePath,
+    ) -> Result<impl Iterator<Item = Result<RelativePathBuf>>>;
+    fn read_string(&self, path: &RelativePath) -> Result<String>;
+    fn write_string(&self, path: &RelativePath, content: &str) -> Result<()>;
 }
 
 fn open_repository(config: &AnyRepositoryConfig) -> Result<AnyRepository> {

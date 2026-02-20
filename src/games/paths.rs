@@ -47,5 +47,5 @@ pub fn rewrite_path(path: &str) -> Result<PathBuf> {
             rewritten.display()
         )));
     }
-    Ok(rewritten.into())
+    Ok(rewritten)
 }
