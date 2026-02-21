@@ -21,3 +21,16 @@ pub fn data_dir() -> Result<PathBuf> {
     let path = dirs.data_local_dir();
     Ok(path.to_path_buf())
 }
+
+pub fn make_path_safe(value: &str) -> String {
+    value
+        .replace("?", "？")
+        .replace(":", "꞉")
+        .replace("*", "✳")
+        .replace("|", "⏐")
+        .replace("<", "＜")
+        .replace(">", "＞")
+        .replace("/", "⧸")
+        .replace("\\", "⧹")
+        .replace("\"", "＂")
+}

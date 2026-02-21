@@ -43,15 +43,21 @@ impl super::Repository for AnyRepository {
         }
     }
 
-    fn read_string(&self, path: &RelativePath) -> Result<String> {
+    fn read_file(&self, path: &RelativePath) -> Result<impl std::io::Read> {
         match self {
-            AnyRepository::Local(repository) => repository.read_string(path),
+            AnyRepository::Local(repository) => repository.read_file(path),
         }
     }
 
-    fn write_string(&self, path: &RelativePath, content: &str) -> Result<()> {
+    fn write_file(&self, path: &RelativePath) -> Result<impl std::io::Write> {
         match self {
-            AnyRepository::Local(repository) => repository.write_string(path, content),
+            AnyRepository::Local(repository) => repository.write_file(path),
+        }
+    }
+
+    fn remove(&self, path: &RelativePath) -> Result<()> {
+        match self {
+            AnyRepository::Local(repository) => repository.remove(path),
         }
     }
 }

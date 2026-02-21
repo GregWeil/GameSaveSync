@@ -3,7 +3,7 @@ use relative_path::RelativePath;
 use serde::{Deserialize, Serialize};
 
 use super::GamePlatform;
-use crate::repository::Repository;
+use crate::repository::{Repository, RepositoryExt};
 
 const DEFINITION_FILE: &str = "definition.toml";
 

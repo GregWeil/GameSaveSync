@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use anyhow::{Context, Error, Result};
 use relative_path::{RelativePath, RelativePathBuf};
 
@@ -13,8 +15,27 @@ pub trait Repository {
         &self,
         path: &RelativePath,
     ) -> Result<impl Iterator<Item = Result<RelativePathBuf>>>;
+    fn read_file(&self, path: &RelativePath) -> Result<impl std::io::Read>;
+    fn write_file(&self, path: &RelativePath) -> Result<impl std::io::Write>;
+    fn remove(&self, path: &RelativePath) -> Result<()>;
+}
+
+pub trait RepositoryExt {
     fn read_string(&self, path: &RelativePath) -> Result<String>;
     fn write_string(&self, path: &RelativePath, content: &str) -> Result<()>;
+}
+
+impl<T: Repository> RepositoryExt for T {
+    fn read_string(&self, path: &RelativePath) -> Result<String> {
+        let file = self.read_file(path)?;
+        std::io::read_to_string(file).with_context(|| format!("failed to read {path}"))
+    }
+
+    fn write_string(&self, path: &RelativePath, content: &str) -> Result<()> {
+        let mut file = self.write_file(path)?;
+        file.write_all(content.as_ref())
+            .with_context(|| format!("failed to write {path}"))
+    }
 }
 
 fn open_repository(config: &AnyRepositoryConfig) -> Result<AnyRepository> {

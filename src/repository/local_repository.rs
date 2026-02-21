@@ -53,15 +53,27 @@ impl Repository for LocalRepository {
             }))
     }
 
-    fn read_string(&self, path: &RelativePath) -> Result<String> {
+    fn read_file(&self, path: &RelativePath) -> Result<impl std::io::Read> {
         let path = path.to_path(&self.path);
-        std::fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))
+        std::fs::File::open(&path).with_context(|| format!("failed to read {}", path.display()))
     }
 
-    fn write_string(&self, path: &RelativePath, content: &str) -> Result<()> {
+    fn write_file(&self, path: &RelativePath) -> Result<impl std::io::Write> {
         let path = path.to_path(&self.path);
-        std::fs::create_dir_all(&path)?;
-        std::fs::write(&path, &content)?;
+        match path.parent() {
+            Some(parent) => std::fs::create_dir_all(parent)?,
+            None => {}
+        }
+        std::fs::File::create(&path).with_context(|| format!("failed to read {}", path.display()))
+    }
+
+    fn remove(&self, path: &RelativePath) -> Result<()> {
+        let path = path.to_path(&self.path);
+        if path.is_file() {
+            std::fs::remove_file(path)?;
+        } else if path.is_dir() {
+            std::fs::remove_dir_all(path)?;
+        }
         Ok(())
     }
 }
