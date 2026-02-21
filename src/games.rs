@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
 
 pub mod definition;
+pub mod manifest;
 pub mod paths;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize, Debug)]
 pub enum GamePlatform {
     Linux,
 }

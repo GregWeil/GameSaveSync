@@ -4,6 +4,7 @@ use clap::Subcommand;
 pub mod list;
 pub mod set_repository;
 pub mod show;
+pub mod sync;
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
@@ -13,6 +14,8 @@ pub enum Commands {
     List,
     #[command(about = "Show the definition of a registered game")]
     Show(show::ShowArgs),
+    #[command(about = "Synchronize linked games")]
+    Sync(sync::SyncArgs),
 }
 
 pub fn exec(command: &Commands) -> Result<()> {
@@ -20,5 +23,6 @@ pub fn exec(command: &Commands) -> Result<()> {
         Commands::SetRepository(args) => set_repository::set_repository(args),
         Commands::List => list::list(),
         Commands::Show(args) => show::show(args),
+        Commands::Sync(args) => sync::sync(args),
     }
 }

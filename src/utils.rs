@@ -1,2 +1,2 @@
 pub mod config;
-mod paths;
+pub mod paths;

@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use clap::Args;
 
 use crate::{
-    games::{self, definition},
+    games::{definition, paths},
     repository::get_repository,
     utils::config,
 };
@@ -25,7 +25,7 @@ pub fn show(args: &ShowArgs) -> Result<()> {
         println!("Save Paths:");
         for path in definition.paths {
             println!("\t{}", path.path);
-            match games::paths::rewrite_path(&path.path) {
+            match paths::rewrite_path(&path.path) {
                 Ok(rewritten) => println!("\t\t➙ {}", rewritten.display()),
                 Err(error) => println!("\t\t× {}", error),
             }
