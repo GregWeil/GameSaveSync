@@ -13,7 +13,7 @@ use crate::{
             GameSaveFileMetadata, GameSaveManifest, read_repository_manifest, read_synced_manifest,
             write_repository_manifest, write_synced_manifest,
         },
-        paths,
+        paths::{self, rewrite_path},
     },
     repository::{Repository, get_repository},
     utils::{config, paths::make_path_safe},
@@ -45,49 +45,84 @@ pub fn sync(args: &SyncArgs) -> Result<()> {
 enum SyncDirection {
     ToRepository,
     FromRepository,
-    Conflict,
-    NoChange,
+    DoNothing,
+}
+
+impl std::fmt::Display for SyncDirection {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::ToRepository => write!(f, "Store save in repository"),
+            Self::FromRepository => write!(f, "Apply save from repository"),
+            Self::DoNothing => write!(f, "Do nothing"),
+        }
+    }
 }
 
 fn sync_game(game: &str, repository: &impl Repository, args: &SyncArgs) -> Result<()> {
     println!("Checking {}", game);
     let definition = load_definition(repository, game)?;
     let local_files = get_local_files(&definition)?;
-    let repository_manifest = read_repository_manifest(repository, game)?;
-    let synced_manifest = read_synced_manifest(game)?;
+    let repository_manifest = match read_repository_manifest(repository, game)? {
+        Some(manifest) => Some((get_manifest_files(&manifest)?, manifest)),
+        None => None,
+    };
+    let synced_manifest = match read_synced_manifest(game)? {
+        Some(manifest) => Some((get_manifest_files(&manifest)?, manifest)),
+        None => None,
+    };
     let sync_direction = match &repository_manifest {
-        Some(repository_manifest) => match &synced_manifest {
-            Some(synced_manifest) => {
-                let synced_files = get_manifest_files(synced_manifest)?;
-                let repository_files = get_manifest_files(repository_manifest)?;
+        Some((repository_files, _)) => match &synced_manifest {
+            Some((synced_files, _)) => {
                 let local_changed = !save_files_equal(&local_files, &synced_files);
                 let repository_changed = !save_files_equal(&synced_files, &repository_files);
                 match (local_changed, repository_changed) {
-                    (true, true) => SyncDirection::Conflict,
+                    (true, true) => conflict_prompt(&format!(
+                        "{} has changed locally and in the repository",
+                        &game
+                    ))?,
                     (true, false) => SyncDirection::ToRepository,
                     (false, true) => SyncDirection::FromRepository,
-                    (false, false) => SyncDirection::NoChange,
+                    (false, false) => SyncDirection::DoNothing,
                 }
             }
             // No local manifest
-            None => SyncDirection::Conflict,
+            None => conflict_prompt(&format!("{} has not been synced to this device", &game))?,
         },
         // No repository manifest
         None => SyncDirection::ToRepository,
     };
     match sync_direction {
-        SyncDirection::Conflict => println!("- Conflict detected, skipping {game}"),
         SyncDirection::ToRepository => {
             println!("- Storing save in repository");
             sync_game_to_repository(&definition, &local_files, repository, args)?;
         }
         SyncDirection::FromRepository => {
             println!("- Applying save from repository");
-            sync_game_from_repository()?;
+            match repository_manifest {
+                Some((files, manifest)) => {
+                    sync_game_from_repository(&manifest, &files, repository, args)?
+                }
+                None => {
+                    unreachable!("impossible to sync from repository with no repository manifest")
+                }
+            }
         }
-        SyncDirection::NoChange => println!("- No changes detected"),
+        SyncDirection::DoNothing => {}
     }
     Ok(())
+}
+
+fn conflict_prompt(message: &str) -> Result<SyncDirection> {
+    inquire::Select::new(
+        message,
+        vec![
+            SyncDirection::DoNothing,
+            SyncDirection::ToRepository,
+            SyncDirection::FromRepository,
+        ],
+    )
+    .prompt()
+    .with_context(|| "failed to prompt for sync direction")
 }
 
 fn sync_game_to_repository(
@@ -135,7 +170,47 @@ fn sync_game_to_repository(
     Ok(())
 }
 
-fn sync_game_from_repository() -> Result<()> {
+fn sync_game_from_repository(
+    manifest: &GameSaveManifest,
+    repository_files: &ResolvedSaveFiles,
+    repository: &impl Repository,
+    args: &SyncArgs,
+) -> Result<()> {
+    for path in &manifest.definition.paths {
+        let path = rewrite_path(&path.path)?;
+        if repository_files.contains_key(&path) {
+            continue;
+        }
+        if args.dry_run {
+            println!("- Removing save file at {}", path.display());
+        } else if path.is_file() {
+            std::fs::remove_file(&path)?;
+        } else if path.is_dir() {
+            std::fs::remove_dir_all(&path)?;
+        }
+    }
+    for (real_path, (path, file, _)) in repository_files {
+        if args.dry_run {
+            println!("Applying save file {}", real_path.display())
+        } else {
+            let repository_path = RelativePath::new(&manifest.definition.name)
+                .join(manifest.id.to_string())
+                .join(make_path_safe(path))
+                .join(file);
+            let mut repository_file = repository.read_file(&repository_path)?;
+            match real_path.parent() {
+                Some(parent) => std::fs::create_dir_all(parent)?,
+                None => unreachable!("save file paths must have a parent"),
+            }
+            let mut local_file = std::fs::File::create(real_path)
+                .with_context(|| format!("failed to create file at {}", real_path.display()))?;
+            std::io::copy(&mut repository_file, &mut local_file)
+                .with_context(|| format!("failed to copy {} to repository", real_path.display()))?;
+        }
+    }
+    if !args.dry_run {
+        write_synced_manifest(&manifest)?;
+    }
     Ok(())
 }
 
@@ -180,7 +255,7 @@ fn get_local_files(definition: &GameDefinition) -> Result<ResolvedSaveFiles> {
                         GameSaveFileMetadata { modified, size },
                     ),
                 );
-            } else {
+            } else if path.exists() {
                 return Err(Error::msg(format!(
                     "save path {} is not a file or directory",
                     path.display()
