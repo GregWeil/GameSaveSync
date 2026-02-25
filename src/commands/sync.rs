@@ -277,9 +277,7 @@ fn save_files_equal(left: &ResolvedSaveFiles, right: &ResolvedSaveFiles) -> bool
     for (path, (_, _, left_metadata)) in left {
         match right.get(path) {
             Some((_, _, right_metadata)) if left_metadata == right_metadata => {}
-            _ => {
-                println!("{} {:?} {:?}",path.display(),left_metadata,right.get(path));
-                return false},
+            _ => return false,
         }
     }
     true
