@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use std::path::PathBuf;
+use std::{collections::HashMap, print};
 
 use anyhow::{Context, Error, Result};
 use clap::Args;
@@ -20,12 +20,27 @@ use crate::{
     utils::{config, paths::make_path_safe},
 };
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Args, Debug)]
 pub struct SyncArgs {
     #[arg(help = "Sync only a specific game")]
     game: Option<String>,
     #[arg(short, long, help = "Simulate without modifying files")]
     dry_run: bool,
+    #[arg(
+        long,
+        conflicts_with = "force_apply",
+        help = "Store the local save in the repository regardless of sync state"
+    )]
+    force_store: bool,
+    #[arg(
+        long,
+        conflicts_with = "force_store",
+        help = "Apply the repository save over the local save regardless of sync state"
+    )]
+    force_apply: bool,
 }
 
 pub fn sync(args: &SyncArgs) -> Result<()> {
@@ -42,11 +57,17 @@ pub fn sync(args: &SyncArgs) -> Result<()> {
     Ok(())
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum SyncDirection {
     ToRepository,
     FromRepository,
     DoNothing,
+}
+
+#[derive(Debug, PartialEq)]
+enum SyncDetermination {
+    Automatic(SyncDirection),
+    Conflict(String, Option<UtcDateTime>, OffsetDateTime),
 }
 
 fn sync_game(game: &str, repository: &impl Repository, args: &SyncArgs) -> Result<()> {
@@ -61,40 +82,18 @@ fn sync_game(game: &str, repository: &impl Repository, args: &SyncArgs) -> Resul
         Some(manifest) => Some((get_manifest_files(&manifest)?, manifest)),
         None => None,
     };
-    let sync_direction = match &repository_state {
-        Some((repository_files, repository_manifest)) => match &synced_state {
-            Some((synced_files, synced_manifest)) => {
-                let local_changed = !save_files_equal(&local_files, &synced_files);
-                let repository_changed = !save_files_equal(&synced_files, &repository_files);
-                match (local_changed, repository_changed) {
-                    (true, true) => {
-                        let local_last_mod = local_files.values().map(|file| file.2.modified).max();
-                        conflict_prompt(
-                            &format!(
-                                "{} has changed here and in the repository (last synced at {})",
-                                &game, &synced_manifest.timestamp
-                            ),
-                            local_last_mod,
-                            repository_manifest.timestamp,
-                        )?
-                    }
-                    (true, false) => SyncDirection::ToRepository,
-                    (false, true) => SyncDirection::FromRepository,
-                    (false, false) => SyncDirection::DoNothing,
-                }
-            }
-            // No local manifest
-            None => {
-                let local_last_mod = local_files.values().map(|file| file.2.modified).max();
-                conflict_prompt(
-                    &format!("{} has not been synced to this device", &game),
-                    local_last_mod,
-                    repository_manifest.timestamp,
-                )?
-            }
-        },
-        // No repository manifest
-        None => SyncDirection::ToRepository,
+    let sync_direction = determine_sync_direction(
+        &definition,
+        &local_files,
+        &synced_state,
+        &repository_state,
+        &args,
+    )?;
+    let sync_direction = match sync_direction {
+        SyncDetermination::Automatic(direction) => direction,
+        SyncDetermination::Conflict(message, local_last_mod, repository_synced) => {
+            conflict_prompt(&message, local_last_mod, repository_synced)?
+        }
     };
     match sync_direction {
         SyncDirection::ToRepository => {
@@ -112,9 +111,74 @@ fn sync_game(game: &str, repository: &impl Repository, args: &SyncArgs) -> Resul
                 }
             }
         }
-        SyncDirection::DoNothing => {}
+        SyncDirection::DoNothing => {
+            println!("- Taking no action");
+        }
     }
     Ok(())
+}
+
+fn determine_sync_direction(
+    definition: &GameDefinition,
+    local_files: &ResolvedSaveFiles,
+    synced_state: &Option<(ResolvedSaveFiles, GameSaveManifest)>,
+    repository_state: &Option<(ResolvedSaveFiles, GameSaveManifest)>,
+    args: &SyncArgs,
+) -> Result<SyncDetermination> {
+    if args.force_store && args.force_apply {
+        print!("- Unable to simultaneously force-store and force-apply");
+        return Ok(SyncDetermination::Automatic(SyncDirection::DoNothing));
+    }
+    if args.force_store {
+        return Ok(SyncDetermination::Automatic(SyncDirection::ToRepository));
+    }
+    if args.force_apply {
+        match repository_state {
+            Some(_) => {
+                return Ok(SyncDetermination::Automatic(SyncDirection::FromRepository));
+            }
+            None => {
+                print!("- No save in repository to apply");
+                return Ok(SyncDetermination::Automatic(SyncDirection::DoNothing));
+            }
+        }
+    }
+    let direction = match repository_state {
+        Some((repository_files, repository_manifest)) => match synced_state {
+            Some((synced_files, synced_manifest)) => {
+                let local_changed = !save_files_equal(&local_files, &synced_files);
+                let repository_changed = !save_files_equal(&synced_files, &repository_files);
+                match (local_changed, repository_changed) {
+                    (true, true) => {
+                        let local_last_mod = local_files.values().map(|file| file.2.modified).max();
+                        SyncDetermination::Conflict(
+                            format!(
+                                "{} has changed here and in the repository (last synced at {})",
+                                &definition.name, &synced_manifest.timestamp
+                            ),
+                            local_last_mod,
+                            repository_manifest.timestamp,
+                        )
+                    }
+                    (true, false) => SyncDetermination::Automatic(SyncDirection::ToRepository),
+                    (false, true) => SyncDetermination::Automatic(SyncDirection::FromRepository),
+                    (false, false) => SyncDetermination::Automatic(SyncDirection::DoNothing),
+                }
+            }
+            // No local manifest
+            None => {
+                let local_last_mod = local_files.values().map(|file| file.2.modified).max();
+                SyncDetermination::Conflict(
+                    format!("{} has not been synced to this device", &definition.name),
+                    local_last_mod,
+                    repository_manifest.timestamp,
+                )
+            }
+        },
+        // No repository manifest
+        None => SyncDetermination::Automatic(SyncDirection::ToRepository),
+    };
+    Ok(direction)
 }
 
 struct ConflictChoice {
@@ -268,6 +332,11 @@ fn sync_game_from_repository(
     Ok(())
 }
 
+/// A file listing from either the local system or a GameSaveManifest
+///
+/// Each entry's key is a full path mapped to the current system
+///
+/// Each value is a GameDefinitionPath and the relative path from it to the file
 type ResolvedSaveFiles = HashMap<PathBuf, (String, RelativePathBuf, GameSaveFileMetadata)>;
 
 fn save_files_equal(left: &ResolvedSaveFiles, right: &ResolvedSaveFiles) -> bool {
