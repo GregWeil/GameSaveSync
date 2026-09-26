@@ -60,4 +60,16 @@ impl super::Repository for AnyRepository {
             AnyRepository::Local(repository) => repository.remove(path),
         }
     }
+
+    fn read_string(&self, path: &RelativePath) -> Result<String> {
+        match self {
+            AnyRepository::Local(repository) => repository.read_string(path),
+        }
+    }
+
+    fn write_string(&self, path: &RelativePath, content: &str) -> Result<()> {
+        match self {
+            AnyRepository::Local(repository) => repository.write_string(path, content),
+        }
+    }
 }

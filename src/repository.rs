@@ -18,14 +18,7 @@ pub trait Repository {
     fn read_file(&self, path: &RelativePath) -> Result<impl std::io::Read>;
     fn write_file(&self, path: &RelativePath) -> Result<impl std::io::Write>;
     fn remove(&self, path: &RelativePath) -> Result<()>;
-}
 
-pub trait RepositoryExt {
-    fn read_string(&self, path: &RelativePath) -> Result<String>;
-    fn write_string(&self, path: &RelativePath, content: &str) -> Result<()>;
-}
-
-impl<T: Repository> RepositoryExt for T {
     fn read_string(&self, path: &RelativePath) -> Result<String> {
         let file = self.read_file(path)?;
         std::io::read_to_string(file).with_context(|| format!("failed to read {path}"))
@@ -52,8 +45,7 @@ pub fn get_repository(config: &Option<AnyRepositoryConfig>) -> Result<AnyReposit
     let repository = open_repository(config)?;
     if !repository.is_file(RelativePath::new("GameSaveSync.toml"))? {
         return Result::Err(Error::msg(format!(
-            "Repository {} has not been correctly initialized",
-            config
+            "Repository {config} has not been correctly initialized",
         )));
     }
     Ok(repository)
@@ -64,7 +56,7 @@ pub fn prepare_repository(config: &Option<AnyRepositoryConfig>) -> Result<()> {
     let repository = open_repository(config)?;
     if !repository.is_file(RelativePath::new("GameSaveSync.toml"))? {
         if repository.read_dir(RelativePath::new(""))?.next().is_some() {
-            return Result::Err(Error::msg(format!("Repository {} should be empty", config)));
+            return Result::Err(Error::msg(format!("Repository {config} should be empty")));
         }
         repository
             .write_string(RelativePath::new("GameSaveSync.toml"), "")

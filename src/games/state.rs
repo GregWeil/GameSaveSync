@@ -3,7 +3,7 @@ use relative_path::RelativePath;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::repository::{Repository, RepositoryExt};
+use crate::repository::Repository;
 
 const STATE_FILE: &str = "state.toml";
 

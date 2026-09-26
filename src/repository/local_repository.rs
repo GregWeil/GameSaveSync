@@ -4,8 +4,6 @@ use anyhow::{Context, Error, Result};
 use relative_path::{PathExt, RelativePath, RelativePathBuf};
 use serde::{Deserialize, Serialize};
 
-use super::Repository;
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct LocalRepositoryConfig {
     pub path: PathBuf,
@@ -22,7 +20,7 @@ pub struct LocalRepository {
     path: PathBuf,
 }
 
-impl Repository for LocalRepository {
+impl super::Repository for LocalRepository {
     fn is_file(&self, path: &RelativePath) -> Result<bool> {
         let path = path.to_path(&self.path);
         Ok(path.is_file())
@@ -64,7 +62,7 @@ impl Repository for LocalRepository {
             Some(parent) => std::fs::create_dir_all(parent)?,
             None => {}
         }
-        std::fs::File::create(&path).with_context(|| format!("failed to read {}", path.display()))
+        std::fs::File::create(&path).with_context(|| format!("failed to write {}", path.display()))
     }
 
     fn remove(&self, path: &RelativePath) -> Result<()> {
@@ -81,19 +79,19 @@ impl Repository for LocalRepository {
 pub fn open_repository(config: &LocalRepositoryConfig) -> Result<LocalRepository> {
     if !config.path.is_absolute() {
         return Result::Err(Error::msg(format!(
-            "Path {} is not absolute",
+            "Repository path {} is not absolute",
             config.path.display()
         )));
     }
     if !config.path.exists() {
         return Result::Err(Error::msg(format!(
-            "Path {} does not exist",
+            "Repository path {} does not exist",
             config.path.display()
         )));
     }
     if !config.path.is_dir() {
         return Result::Err(Error::msg(format!(
-            "Path {} is not a directory",
+            "Repository path {} is not a directory",
             config.path.display()
         )));
     }

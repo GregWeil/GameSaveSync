@@ -6,10 +6,7 @@ use serde::{Deserialize, Serialize};
 use time::{OffsetDateTime, UtcDateTime};
 use uuid::Uuid;
 
-use crate::{
-    repository::{Repository, RepositoryExt},
-    utils::paths::data_dir,
-};
+use crate::{repository::Repository, utils::paths::data_dir};
 
 use super::definition::GameDefinition;
 
