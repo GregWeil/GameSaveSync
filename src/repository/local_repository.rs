@@ -34,9 +34,9 @@ impl super::Repository for LocalRepository {
     fn read_dir(
         &self,
         path: &RelativePath,
-    ) -> Result<impl Iterator<Item = Result<RelativePathBuf>>> {
+    ) -> Result<Box<dyn Iterator<Item = Result<RelativePathBuf>>>> {
         let path = path.to_path(&self.path);
-        Ok(path
+        let iterator = path
             .read_dir()
             .with_context(|| format!("failed to enumerate {}", path.display()))?
             .map(move |entry| -> Result<RelativePathBuf> {
@@ -48,21 +48,26 @@ impl super::Repository for LocalRepository {
                         path.display()
                     )
                 })
-            }))
+            });
+        Ok(Box::new(iterator))
     }
 
-    fn read_file(&self, path: &RelativePath) -> Result<impl std::io::Read> {
+    fn read_file(&self, path: &RelativePath) -> Result<Box<dyn std::io::Read>> {
         let path = path.to_path(&self.path);
-        std::fs::File::open(&path).with_context(|| format!("failed to read {}", path.display()))
+        let file = std::fs::File::open(&path)
+            .with_context(|| format!("failed to read {}", path.display()))?;
+        Ok(Box::new(file))
     }
 
-    fn write_file(&self, path: &RelativePath) -> Result<impl std::io::Write> {
+    fn write_file(&self, path: &RelativePath) -> Result<Box<dyn std::io::Write>> {
         let path = path.to_path(&self.path);
         match path.parent() {
             Some(parent) => std::fs::create_dir_all(parent)?,
             None => {}
         }
-        std::fs::File::create(&path).with_context(|| format!("failed to write {}", path.display()))
+        let file = std::fs::File::create(&path)
+            .with_context(|| format!("failed to write {}", path.display()))?;
+        Ok(Box::new(file))
     }
 
     fn remove(&self, path: &RelativePath) -> Result<()> {
@@ -80,18 +85,6 @@ pub fn open_repository(config: &LocalRepositoryConfig) -> Result<LocalRepository
     if !config.path.is_absolute() {
         return Result::Err(Error::msg(format!(
             "Repository path {} is not absolute",
-            config.path.display()
-        )));
-    }
-    if !config.path.exists() {
-        return Result::Err(Error::msg(format!(
-            "Repository path {} does not exist",
-            config.path.display()
-        )));
-    }
-    if !config.path.is_dir() {
-        return Result::Err(Error::msg(format!(
-            "Repository path {} is not a directory",
             config.path.display()
         )));
     }
