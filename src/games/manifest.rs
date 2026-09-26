@@ -32,8 +32,11 @@ pub struct GameSaveManifest {
 pub fn read_repository_manifest(
     repository: &impl Repository,
     game: &str,
+    id: &Uuid,
 ) -> Result<Option<GameSaveManifest>> {
-    let path = RelativePath::new(&game).join(MANIFEST_FILE);
+    let path = RelativePath::new(&game)
+        .join(id.to_string())
+        .join(MANIFEST_FILE);
     if !repository.is_file(&path)? {
         return Ok(None);
     }
@@ -49,7 +52,9 @@ pub fn write_repository_manifest(
     manifest: &GameSaveManifest,
     repository: &impl Repository,
 ) -> Result<()> {
-    let path = RelativePath::new(&manifest.definition.name).join(MANIFEST_FILE);
+    let path = RelativePath::new(&manifest.definition.name)
+        .join(manifest.id.to_string())
+        .join(MANIFEST_FILE);
     match path.parent() {
         Some(dir) if !repository.is_dir(dir)? => {
             return Err(Error::msg(

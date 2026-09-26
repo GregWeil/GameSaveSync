@@ -7,6 +7,7 @@ use relative_path::{PathExt, RelativePath, RelativePathBuf};
 use time::{OffsetDateTime, UtcDateTime};
 use uuid::Uuid;
 
+use crate::games::state::{GameState, read_game_state, write_game_state};
 use crate::{
     games::{
         definition::{GameDefinition, list_definitions, load_definition},
@@ -74,8 +75,11 @@ fn sync_game(game: &str, repository: &impl Repository, args: &SyncArgs) -> Resul
     println!("Checking {}", game);
     let definition = load_definition(repository, game)?;
     let local_files = get_local_files(&definition)?;
-    let repository_state = match read_repository_manifest(repository, game)? {
-        Some(manifest) => Some((get_manifest_files(&manifest)?, manifest)),
+    let repository_state = match read_game_state(repository, game)?.current {
+        Some(manifest_id) => match read_repository_manifest(repository, game, &manifest_id)? {
+            Some(manifest) => Some((get_manifest_files(&manifest)?, manifest)),
+            None => None,
+        },
         None => None,
     };
     let synced_state = match read_synced_manifest(game)? {
@@ -188,7 +192,8 @@ struct ConflictChoice {
 
 impl std::fmt::Display for ConflictChoice {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", &self.label)
+        write!(f, "{}", &self.label)?;
+        Ok(())
     }
 }
 
@@ -265,13 +270,21 @@ fn sync_game_to_repository(
         timestamp: time::OffsetDateTime::now_local()?,
         files,
     };
-    let old_manifest = read_repository_manifest(repository, &definition.name)?;
+    let old_state = read_game_state(repository, &definition.name)?;
     if !args.dry_run {
         write_repository_manifest(&manifest, repository)?;
+        write_game_state(
+            &GameState {
+                current: Some(manifest_id),
+            },
+            repository,
+            &definition.name,
+        )?;
         write_synced_manifest(&manifest)?;
-        match old_manifest {
-            Some(old_manifest) => repository
-                .remove(&RelativePath::new(&definition.name).join(old_manifest.id.to_string()))?,
+        match old_state.current {
+            Some(old_id) => {
+                repository.remove(&RelativePath::new(&definition.name).join(old_id.to_string()))?
+            }
             None => {}
         }
     }
