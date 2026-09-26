@@ -4,18 +4,21 @@ use anyhow::{Context, Error, Result};
 use relative_path::{RelativePath, RelativePathBuf};
 use serde::{Deserialize, Serialize};
 
+pub mod kde_repository;
 pub mod local_repository;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type")]
 pub enum AnyRepositoryConfig {
     Local(local_repository::LocalRepositoryConfig),
+    KDE(kde_repository::KdeRepositoryConfig),
 }
 
 impl std::fmt::Display for AnyRepositoryConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             AnyRepositoryConfig::Local(config) => write!(f, "{}", config),
+            AnyRepositoryConfig::KDE(config) => write!(f, "KDE KIO - {}", config),
         }
     }
 }
@@ -84,6 +87,9 @@ fn open_repository(config: &AnyRepositoryConfig) -> Result<Box<dyn Repository>> 
     match config {
         AnyRepositoryConfig::Local(local_config) => {
             Ok(Box::new(local_repository::open_repository(local_config)?))
+        }
+        AnyRepositoryConfig::KDE(kde_config) => {
+            Ok(Box::new(kde_repository::open_repository(kde_config)?))
         }
     }
 }
