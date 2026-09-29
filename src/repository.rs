@@ -1,4 +1,4 @@
-use std::{io::Write, ops::Deref};
+use std::{ops::Deref, path::Path};
 
 use anyhow::{Context, Error, Result};
 use relative_path::{RelativePath, RelativePathBuf};
@@ -30,20 +30,11 @@ pub trait Repository {
         &self,
         path: &RelativePath,
     ) -> Result<Box<dyn Iterator<Item = Result<RelativePathBuf>>>>;
-    fn read_file(&self, path: &RelativePath) -> Result<Box<dyn std::io::Read>>;
-    fn write_file(&self, path: &RelativePath) -> Result<Box<dyn std::io::Write>>;
+    fn read_string(&self, path: &RelativePath) -> Result<String>;
+    fn write_string(&self, path: &RelativePath, content: &str) -> Result<()>;
+    fn download_file(&self, repository_path: &RelativePath, local_path: &Path) -> Result<()>;
+    fn upload_file(&self, local_path: &Path, repository_path: &RelativePath) -> Result<()>;
     fn remove(&self, path: &RelativePath) -> Result<()>;
-
-    fn read_string(&self, path: &RelativePath) -> Result<String> {
-        let file = self.read_file(path)?;
-        std::io::read_to_string(file).with_context(|| format!("failed to read {path}"))
-    }
-
-    fn write_string(&self, path: &RelativePath, content: &str) -> Result<()> {
-        let mut file = self.write_file(path)?;
-        file.write_all(content.as_ref())
-            .with_context(|| format!("failed to write {path}"))
-    }
 }
 
 impl Repository for Box<dyn Repository> {
@@ -62,24 +53,24 @@ impl Repository for Box<dyn Repository> {
         self.deref().read_dir(path)
     }
 
-    fn read_file(&self, path: &RelativePath) -> Result<Box<dyn std::io::Read>> {
-        self.deref().read_file(path)
-    }
-
-    fn write_file(&self, path: &RelativePath) -> Result<Box<dyn std::io::Write>> {
-        self.deref().write_file(path)
-    }
-
-    fn remove(&self, path: &RelativePath) -> Result<()> {
-        self.deref().remove(path)
-    }
-
     fn read_string(&self, path: &RelativePath) -> Result<String> {
         self.deref().read_string(path)
     }
 
     fn write_string(&self, path: &RelativePath, content: &str) -> Result<()> {
         self.deref().write_string(path, content)
+    }
+
+    fn download_file(&self, repository_path: &RelativePath, local_path: &Path) -> Result<()> {
+        self.deref().download_file(repository_path, local_path)
+    }
+
+    fn upload_file(&self, local_path: &Path, repository_path: &RelativePath) -> Result<()> {
+        self.deref().upload_file(local_path, repository_path)
+    }
+
+    fn remove(&self, path: &RelativePath) -> Result<()> {
+        self.deref().remove(path)
     }
 }
 

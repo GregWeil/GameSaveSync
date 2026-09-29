@@ -75,9 +75,9 @@ pub fn read_synced_manifest(game: &str) -> Result<Option<GameSaveManifest>> {
         return Ok(None);
     }
     let file = std::fs::read_to_string(&path)
-        .with_context(|| format!("failed to read cached manifest for {game}"))?;
+        .with_context(|| format!("failed to read synced manifest for {game}"))?;
     let manifest = toml::from_str(&file)
-        .with_context(|| format!("failed to parse cached manifest for {game}"))?;
+        .with_context(|| format!("failed to parse synced manifest for {game}"))?;
     Ok(Some(manifest))
 }
 

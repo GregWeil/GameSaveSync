@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Error, Result};
 use relative_path::{PathExt, RelativePath, RelativePathBuf};
@@ -18,6 +18,20 @@ impl std::fmt::Display for LocalRepositoryConfig {
 #[derive(Debug)]
 pub struct LocalRepository {
     path: PathBuf,
+}
+
+fn copy_file(source: &Path, destination: &Path) -> Result<()> {
+    match destination.parent() {
+        Some(parent) => std::fs::create_dir_all(parent)?,
+        None => {}
+    }
+    let mut source_file = std::fs::File::open(source)
+        .with_context(|| format!("failed to open {} for reading", source.display()))?;
+    let mut destination_file = std::fs::File::create(destination)
+        .with_context(|| format!("failed to open {} for writing", destination.display()))?;
+    std::io::copy(&mut source_file, &mut destination_file)
+        .with_context(|| format!("failed to copy to {}", destination.display()))?;
+    Ok(())
 }
 
 impl super::Repository for LocalRepository {
@@ -52,22 +66,36 @@ impl super::Repository for LocalRepository {
         Ok(Box::new(iterator))
     }
 
-    fn read_file(&self, path: &RelativePath) -> Result<Box<dyn std::io::Read>> {
+    fn read_string(&self, path: &RelativePath) -> Result<String> {
         let path = path.to_path(&self.path);
-        let file = std::fs::File::open(&path)
+        let content = std::fs::read_to_string(&path)
             .with_context(|| format!("failed to read {}", path.display()))?;
-        Ok(Box::new(file))
+        Ok(content)
     }
 
-    fn write_file(&self, path: &RelativePath) -> Result<Box<dyn std::io::Write>> {
+    fn write_string(&self, path: &RelativePath, content: &str) -> Result<()> {
         let path = path.to_path(&self.path);
         match path.parent() {
             Some(parent) => std::fs::create_dir_all(parent)?,
             None => {}
         }
-        let file = std::fs::File::create(&path)
+        std::fs::write(&path, content)
             .with_context(|| format!("failed to write {}", path.display()))?;
-        Ok(Box::new(file))
+        Ok(())
+    }
+
+    fn download_file(&self, repository_path: &RelativePath, local_path: &Path) -> Result<()> {
+        let repository_path = repository_path.to_path(&self.path);
+        copy_file(&repository_path, local_path)
+            .with_context(|| format!("failed to copy to {}", local_path.display()))?;
+        Ok(())
+    }
+
+    fn upload_file(&self, local_path: &Path, repository_path: &RelativePath) -> Result<()> {
+        let repository_path = repository_path.to_path(&self.path);
+        copy_file(local_path, &repository_path)
+            .with_context(|| format!("failed to copy from {}", local_path.display()))?;
+        Ok(())
     }
 
     fn remove(&self, path: &RelativePath) -> Result<()> {

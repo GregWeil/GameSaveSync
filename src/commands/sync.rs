@@ -74,6 +74,7 @@ enum SyncDetermination {
 fn sync_game(game: &str, repository: &impl Repository, args: &SyncArgs) -> Result<()> {
     println!("Checking {}", game);
     let definition = load_definition(repository, game)?;
+    let game = &definition.name; // fixes casing or other formatting
     let local_files = get_local_files(&definition)?;
     let repository_state = match read_game_state(repository, game)?.current {
         Some(manifest_id) => match read_repository_manifest(repository, game, &manifest_id)? {
@@ -254,10 +255,9 @@ fn sync_game_to_repository(
                 .join(manifest_id.to_string())
                 .join(make_path_safe(path))
                 .join(file);
-            let mut local_file = std::fs::File::open(real_path)?;
-            let mut repository_file = repository.write_file(&repository_path)?;
-            std::io::copy(&mut local_file, &mut repository_file)
-                .with_context(|| format!("failed to copy {} to repository", real_path.display()))?;
+            repository
+                .upload_file(&real_path, &repository_path)
+                .with_context(|| format!("failed to sync {} to repository", &definition.name))?;
         }
         files
             .entry(path.clone())
@@ -318,20 +318,55 @@ fn sync_game_from_repository(
                 .join(manifest.id.to_string())
                 .join(make_path_safe(path))
                 .join(file);
-            let mut repository_file = repository.read_file(&repository_path)?;
             match real_path.parent() {
                 Some(parent) => std::fs::create_dir_all(parent)?,
                 None => unreachable!("save file paths must have a parent"),
             }
-            let mut local_file = std::fs::File::create(real_path)
-                .with_context(|| format!("failed to create file at {}", real_path.display()))?;
-            std::io::copy(&mut repository_file, &mut local_file)
-                .with_context(|| format!("failed to copy {} to repository", real_path.display()))?;
+            repository
+                .download_file(&repository_path, &real_path)
+                .with_context(|| {
+                    format!(
+                        "failed to sync {} from repository",
+                        &manifest.definition.name
+                    )
+                })?;
+            let local_file = std::fs::File::open(real_path)
+                .with_context(|| format!("failed to open {}", real_path.display()))?;
             local_file
                 .set_modified(metadata.modified.into())
                 .with_context(|| {
                     format!("failed to set modified time on {}", real_path.display())
                 })?;
+            let local_metadata = real_path.metadata()?;
+            if local_metadata.len() != metadata.size {
+                return Err(Error::msg(format!(
+                    "downloaded file {} is {} bytes but should be {} bytes",
+                    real_path.display(),
+                    local_metadata.len(),
+                    metadata.size
+                )))
+                .with_context(|| {
+                    format!(
+                        "failed to sync {} from the repository",
+                        &manifest.definition.name
+                    )
+                });
+            }
+            let local_modified = time::UtcDateTime::from(local_metadata.modified()?);
+            if local_modified != metadata.modified {
+                return Err(Error::msg(format!(
+                    "downloaded file {} has mod time {} but should be {}",
+                    real_path.display(),
+                    local_modified,
+                    metadata.modified
+                )))
+                .with_context(|| {
+                    format!(
+                        "failed to sync {} from the repository",
+                        &manifest.definition.name
+                    )
+                });
+            }
         }
     }
     if !args.dry_run {
