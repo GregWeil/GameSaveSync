@@ -3,7 +3,7 @@ use relative_path::RelativePath;
 use serde::{Deserialize, Serialize};
 
 use super::GamePlatform;
-use crate::repository::Repository;
+use crate::repository::{Repository, RepositoryPathMetadata};
 
 const DEFINITION_FILE: &str = "definition.toml";
 
@@ -23,7 +23,8 @@ pub struct GameDefinition {
 
 pub fn definition_exists(repository: &impl Repository, game: &str) -> Result<bool> {
     let path = RelativePath::new(&game).join(DEFINITION_FILE);
-    return Ok(repository.is_file(&path)?);
+    let metadata = repository.metadata(&path)?;
+    Ok(matches!(metadata, RepositoryPathMetadata::File))
 }
 
 pub fn list_definitions(repository: &impl Repository) -> Result<Vec<String>> {

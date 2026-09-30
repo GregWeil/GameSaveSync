@@ -41,34 +41,6 @@ lazy_static::lazy_static! {
     static ref RE_FILE_TYPE: Regex = Regex::new(r"(?:^|\n)FILE_TYPE\s+(\d+)(?:\n|$)").unwrap();
 }
 
-fn get_file_type(kio_url: &str) -> Result<Option<String>> {
-    let result = Command::new(KIOCLIENT)
-        .arg("stat")
-        .arg(kio_url)
-        .output()
-        .with_context(|| format!("failed to exec {KIOCLIENT} stat {kio_url}"))?;
-    if !result.status.success() {
-        let error = String::from_utf8(result.stderr)
-            .with_context(|| format!("failed to read {KIOCLIENT} stat stderr"))?;
-        if RE_DOES_NOT_EXIST.is_match(&error) {
-            return Ok(None);
-        }
-        return Result::Err(Error::msg(error))
-            .with_context(|| format!("{KIOCLIENT} stat returned {}", result.status));
-    }
-    let output = String::from_utf8(result.stdout)
-        .with_context(|| format!("failed to read {KIOCLIENT} stat stdout"))?;
-    let captures = match RE_FILE_TYPE.captures(&output) {
-        Some(captures) => captures,
-        None => {
-            return Err(Error::msg(format!(
-                "Did not find FILE_TYPE in {KIOCLIENT} stat stdout"
-            )));
-        }
-    };
-    Ok(Some(captures[1].into()))
-}
-
 fn copy_file(
     source_protocol: &Option<String>,
     source_path: &Path,
@@ -94,30 +66,48 @@ fn copy_file(
 }
 
 impl super::Repository for KdeRepository {
-    fn is_file(&self, path: &RelativePath) -> Result<bool> {
-        let path = kio_url(&self.protocol, &path.to_path(&self.path));
-        match get_file_type(&path)? {
-            Some(ref file_type) if file_type == "0100000" => Ok(true),
-            _ => Ok(false),
+    fn metadata(&self, path: &RelativePath) -> Result<super::RepositoryPathMetadata> {
+        let url = kio_url(&self.protocol, &path.to_path(&self.path));
+        let result = Command::new(KIOCLIENT)
+            .arg("stat")
+            .arg(&url)
+            .output()
+            .with_context(|| format!("failed to exec {KIOCLIENT} stat {url}"))?;
+        if !result.status.success() {
+            let error = String::from_utf8(result.stderr)
+                .with_context(|| format!("failed to read {KIOCLIENT} stat stderr"))?;
+            if RE_DOES_NOT_EXIST.is_match(&error) {
+                return Ok(super::RepositoryPathMetadata::DoesNotExist);
+            }
+            return Result::Err(Error::msg(error))
+                .with_context(|| format!("{KIOCLIENT} stat returned {}", result.status));
         }
-    }
-
-    fn is_dir(&self, path: &RelativePath) -> Result<bool> {
-        let path = kio_url(&self.protocol, &path.to_path(&self.path));
-        match get_file_type(&path)? {
-            Some(ref file_type) if file_type == "0040000" => Ok(true),
-            _ => Ok(false),
-        }
+        let output = String::from_utf8(result.stdout)
+            .with_context(|| format!("failed to read {KIOCLIENT} stat stdout"))?;
+        let captures = match RE_FILE_TYPE.captures(&output) {
+            Some(captures) => captures,
+            None => {
+                return Err(Error::msg(format!(
+                    "Did not find FILE_TYPE in {KIOCLIENT} stat stdout"
+                )));
+            }
+        };
+        let file_type = match captures[1].into() {
+            "0100000" => super::RepositoryPathMetadata::File,
+            "0040000" => super::RepositoryPathMetadata::Directory,
+            _ => super::RepositoryPathMetadata::Other,
+        };
+        Ok(file_type)
     }
 
     fn read_dir(
         &self,
         path: &RelativePath,
     ) -> Result<Box<dyn Iterator<Item = Result<RelativePathBuf>>>> {
-        let path = kio_url(&self.protocol, &path.to_path(&self.path));
+        let url = kio_url(&self.protocol, &path.to_path(&self.path));
         let result = Command::new(KIOCLIENT)
             .arg("ls")
-            .arg(path)
+            .arg(&url)
             .output()
             .with_context(|| format!("failed to exec {KIOCLIENT} ls"))?;
         if !result.status.success() {
@@ -137,10 +127,10 @@ impl super::Repository for KdeRepository {
     }
 
     fn read_string(&self, path: &RelativePath) -> Result<String> {
-        let path = kio_url(&self.protocol, &path.to_path(&self.path));
+        let url = kio_url(&self.protocol, &path.to_path(&self.path));
         let result = Command::new(KIOCLIENT)
             .arg("cat")
-            .arg(path)
+            .arg(&url)
             .output()
             .with_context(|| format!("failed to exec {KIOCLIENT} cat"))?;
         if !result.status.success() {
@@ -190,10 +180,10 @@ impl super::Repository for KdeRepository {
     }
 
     fn remove(&self, path: &RelativePath) -> Result<()> {
-        let path = kio_url(&self.protocol, &path.to_path(&self.path));
+        let url = kio_url(&self.protocol, &path.to_path(&self.path));
         let result = Command::new(KIOCLIENT)
             .arg("remove")
-            .arg(&path)
+            .arg(&url)
             .output()
             .with_context(|| format!("failed to exec {KIOCLIENT} remove"))?;
         if !result.status.success() {

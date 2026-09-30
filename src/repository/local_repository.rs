@@ -35,14 +35,24 @@ fn copy_file(source: &Path, destination: &Path) -> Result<()> {
 }
 
 impl super::Repository for LocalRepository {
-    fn is_file(&self, path: &RelativePath) -> Result<bool> {
+    fn metadata(&self, path: &RelativePath) -> Result<super::RepositoryPathMetadata> {
         let path = path.to_path(&self.path);
-        Ok(path.is_file())
-    }
-
-    fn is_dir(&self, path: &RelativePath) -> Result<bool> {
-        let path = path.to_path(&self.path);
-        Ok(path.is_dir())
+        let exists = path
+            .try_exists()
+            .with_context(|| format!("failed to check existence for {}", path.display()))?;
+        if !exists {
+            return Ok(super::RepositoryPathMetadata::DoesNotExist);
+        }
+        let metadata = path
+            .metadata()
+            .with_context(|| format!("failed to check metadata for {}", path.display()))?;
+        if metadata.is_file() {
+            return Ok(super::RepositoryPathMetadata::File);
+        }
+        if metadata.is_dir() {
+            return Ok(super::RepositoryPathMetadata::Directory);
+        }
+        Ok(super::RepositoryPathMetadata::Other)
     }
 
     fn read_dir(

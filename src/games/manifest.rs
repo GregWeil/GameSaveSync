@@ -6,7 +6,10 @@ use serde::{Deserialize, Serialize};
 use time::{OffsetDateTime, UtcDateTime};
 use uuid::Uuid;
 
-use crate::{repository::Repository, utils::paths::data_dir};
+use crate::{
+    repository::{Repository, RepositoryPathMetadata},
+    utils::paths::data_dir,
+};
 
 use super::definition::GameDefinition;
 
@@ -34,7 +37,8 @@ pub fn read_repository_manifest(
     let path = RelativePath::new(&game)
         .join(id.to_string())
         .join(MANIFEST_FILE);
-    if !repository.is_file(&path)? {
+    let metadata = repository.metadata(&path)?;
+    if !matches!(metadata, RepositoryPathMetadata::File) {
         return Ok(None);
     }
     let file = repository
@@ -53,12 +57,15 @@ pub fn write_repository_manifest(
         .join(manifest.id.to_string())
         .join(MANIFEST_FILE);
     match path.parent() {
-        Some(dir) if !repository.is_dir(dir)? => {
-            return Err(Error::msg(
-                "repository manifest directory should already exist",
-            ));
-        }
-        Some(_) => {}
+        Some(dir) => match repository.metadata(&dir)? {
+            RepositoryPathMetadata::Directory => {}
+            _ => {
+                return Err(Error::msg(format!(
+                    "repository manifest directory should already exist for {}",
+                    manifest.definition.name
+                )));
+            }
+        },
         None => unreachable!("repository manifest file should always have a parent path"),
     }
     let serialized = toml::to_string_pretty(manifest)

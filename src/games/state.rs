@@ -3,7 +3,7 @@ use relative_path::RelativePath;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::repository::Repository;
+use crate::repository::{Repository, RepositoryPathMetadata};
 
 const STATE_FILE: &str = "state.toml";
 
@@ -14,7 +14,10 @@ pub struct GameState {
 
 pub fn read_game_state(repository: &impl Repository, game: &str) -> Result<GameState> {
     let path = RelativePath::new(&game).join(STATE_FILE);
-    if !repository.is_file(&path)? {
+    if !matches!(
+        repository.metadata(&path)?,
+        RepositoryPathMetadata::Directory
+    ) {
         return Ok(GameState { current: None });
     }
     let file = repository
@@ -28,10 +31,14 @@ pub fn read_game_state(repository: &impl Repository, game: &str) -> Result<GameS
 pub fn write_game_state(state: &GameState, repository: &impl Repository, game: &str) -> Result<()> {
     let path = RelativePath::new(game).join(STATE_FILE);
     match path.parent() {
-        Some(dir) if !repository.is_dir(dir)? => {
-            return Err(Error::msg("game directory should already exist for {game}"));
-        }
-        Some(_) => {}
+        Some(dir) => match repository.metadata(&dir)? {
+            RepositoryPathMetadata::Directory => {}
+            _ => {
+                return Err(Error::msg(format!(
+                    "game directory should already exist for {game}"
+                )));
+            }
+        },
         None => unreachable!("game state file should always have a parent path"),
     }
     let serialized =

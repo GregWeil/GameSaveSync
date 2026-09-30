@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 pub mod kde_repository;
 pub mod local_repository;
 
+const REPOSITORY_FILE: &str = "GameSaveSync.toml";
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type")]
 pub enum AnyRepositoryConfig {
@@ -23,9 +25,15 @@ impl std::fmt::Display for AnyRepositoryConfig {
     }
 }
 
+pub enum RepositoryPathMetadata {
+    File,
+    Directory,
+    Other,
+    DoesNotExist,
+}
+
 pub trait Repository {
-    fn is_file(&self, path: &RelativePath) -> Result<bool>;
-    fn is_dir(&self, path: &RelativePath) -> Result<bool>;
+    fn metadata(&self, path: &RelativePath) -> Result<RepositoryPathMetadata>;
     fn read_dir(
         &self,
         path: &RelativePath,
@@ -38,12 +46,8 @@ pub trait Repository {
 }
 
 impl Repository for Box<dyn Repository> {
-    fn is_file(&self, path: &RelativePath) -> Result<bool> {
-        self.deref().is_file(path)
-    }
-
-    fn is_dir(&self, path: &RelativePath) -> Result<bool> {
-        self.deref().is_dir(path)
+    fn metadata(&self, path: &RelativePath) -> Result<RepositoryPathMetadata> {
+        self.deref().metadata(path)
     }
 
     fn read_dir(
@@ -88,7 +92,10 @@ fn open_repository(config: &AnyRepositoryConfig) -> Result<Box<dyn Repository>> 
 pub fn get_repository(config: &Option<AnyRepositoryConfig>) -> Result<Box<dyn Repository>> {
     let config = config.as_ref().ok_or(Error::msg("Repository is not set"))?;
     let repository = open_repository(config)?;
-    if !repository.is_file(RelativePath::new("GameSaveSync.toml"))? {
+    if !matches!(
+        repository.metadata(RelativePath::new(REPOSITORY_FILE))?,
+        RepositoryPathMetadata::File
+    ) {
         return Result::Err(Error::msg(format!(
             "Repository {config} has not been correctly initialized",
         )));
@@ -99,12 +106,15 @@ pub fn get_repository(config: &Option<AnyRepositoryConfig>) -> Result<Box<dyn Re
 pub fn prepare_repository(config: &Option<AnyRepositoryConfig>) -> Result<()> {
     let config = config.as_ref().ok_or(Error::msg("Repository is not set"))?;
     let repository = open_repository(config)?;
-    if !repository.is_file(RelativePath::new("GameSaveSync.toml"))? {
+    if !matches!(
+        repository.metadata(RelativePath::new(REPOSITORY_FILE))?,
+        RepositoryPathMetadata::File
+    ) {
         if repository.read_dir(RelativePath::new(""))?.next().is_some() {
             return Result::Err(Error::msg(format!("Repository {config} should be empty")));
         }
         repository
-            .write_string(RelativePath::new("GameSaveSync.toml"), "")
+            .write_string(RelativePath::new(REPOSITORY_FILE), "")
             .with_context(|| "failed to create repository")?;
     }
     Ok(())
