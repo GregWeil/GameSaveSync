@@ -21,10 +21,6 @@ pub struct LocalRepository {
 }
 
 fn copy_file(source: &Path, destination: &Path) -> Result<()> {
-    match destination.parent() {
-        Some(parent) => std::fs::create_dir_all(parent)?,
-        None => {}
-    }
     let mut source_file = std::fs::File::open(source)
         .with_context(|| format!("failed to open {} for reading", source.display()))?;
     let mut destination_file = std::fs::File::create(destination)
@@ -55,7 +51,7 @@ impl super::Repository for LocalRepository {
         Ok(super::RepositoryPathMetadata::Other)
     }
 
-    fn read_dir(
+    fn list_dir(
         &self,
         path: &RelativePath,
     ) -> Result<Box<dyn Iterator<Item = Result<RelativePathBuf>>>> {
@@ -76,6 +72,13 @@ impl super::Repository for LocalRepository {
         Ok(Box::new(iterator))
     }
 
+    fn make_dir(&self, path: &RelativePath) -> Result<()> {
+        let path = path.to_path(&self.path);
+        std::fs::create_dir(&path)
+            .with_context(|| format!("failed to create {}", path.display()))?;
+        Ok(())
+    }
+
     fn read_string(&self, path: &RelativePath) -> Result<String> {
         let path = path.to_path(&self.path);
         let content = std::fs::read_to_string(&path)
@@ -85,10 +88,6 @@ impl super::Repository for LocalRepository {
 
     fn write_string(&self, path: &RelativePath, content: &str) -> Result<()> {
         let path = path.to_path(&self.path);
-        match path.parent() {
-            Some(parent) => std::fs::create_dir_all(parent)?,
-            None => {}
-        }
         std::fs::write(&path, content)
             .with_context(|| format!("failed to write {}", path.display()))?;
         Ok(())

@@ -37,8 +37,9 @@ pub struct KdeRepository {
 const KIOCLIENT: &str = "kioclient";
 
 lazy_static::lazy_static! {
-    static ref RE_DOES_NOT_EXIST: Regex = Regex::new(r"(?:^|\n)kioclient:\s+The file or folder .* does not exist.(?:\n|$)").unwrap();
     static ref RE_FILE_TYPE: Regex = Regex::new(r"(?:^|\n)FILE_TYPE\s+(\d+)(?:\n|$)").unwrap();
+    static ref RE_DOES_NOT_EXIST: Regex = Regex::new(r"(?:^|\n)kioclient:\s+The file or folder .* does not exist.(?:\n|$)").unwrap();
+    static ref RE_FOLDER_EXISTS: Regex = Regex::new(r"(?:^|\n)kioclient:\s+A folder named .* already exists.(?:\n|$)").unwrap();
 }
 
 fn copy_file(
@@ -60,7 +61,7 @@ fn copy_file(
         let error = String::from_utf8(result.stderr)
             .with_context(|| format!("failed to read {KIOCLIENT} copy stderr"))?;
         return Result::Err(Error::msg(error))
-            .with_context(|| format!("{KIOCLIENT} remove returned {}", result.status));
+            .with_context(|| format!("{KIOCLIENT} copy returned {}", result.status));
     }
     Ok(())
 }
@@ -100,7 +101,7 @@ impl super::Repository for KdeRepository {
         Ok(file_type)
     }
 
-    fn read_dir(
+    fn list_dir(
         &self,
         path: &RelativePath,
     ) -> Result<Box<dyn Iterator<Item = Result<RelativePathBuf>>>> {
@@ -124,6 +125,25 @@ impl super::Repository for KdeRepository {
             .filter(|line| !line.is_empty() && *line != ".")
             .map(|line| anyhow::Ok(RelativePathBuf::from(line)));
         Ok(Box::new(iterator.collect::<Vec<_>>().into_iter()))
+    }
+
+    fn make_dir(&self, path: &RelativePath) -> Result<()> {
+        let url = kio_url(&self.protocol, &path.to_path(&self.path));
+        let result = Command::new(KIOCLIENT)
+            .arg("mkdir")
+            .arg(&url)
+            .output()
+            .with_context(|| format!("failed to exec {KIOCLIENT} mkdir"))?;
+        if !result.status.success() {
+            let error = String::from_utf8(result.stderr)
+                .with_context(|| format!("failed to read {KIOCLIENT} mkdir stderr"))?;
+            if RE_FOLDER_EXISTS.is_match(&error) {
+                return Ok(());
+            }
+            return Result::Err(Error::msg(error))
+                .with_context(|| format!("{KIOCLIENT} mkdir returned {}", result.status));
+        }
+        Ok(())
     }
 
     fn read_string(&self, path: &RelativePath) -> Result<String> {

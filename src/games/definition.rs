@@ -30,13 +30,13 @@ pub fn definition_exists(repository: &impl Repository, game: &str) -> Result<boo
 pub fn list_definitions(repository: &impl Repository) -> Result<Vec<String>> {
     let mut games = vec![];
     let items = repository
-        .read_dir(RelativePath::new(""))
+        .list_dir(RelativePath::new(""))
         .with_context(|| "failed to iterate repository")?;
     for path in items {
         match path?.file_name() {
             Some(name) if definition_exists(repository, name)? => games.push(name.into()),
             Some(_) => {}
-            None => unreachable!("read_dir should never return an empty path"),
+            None => unreachable!("list_dir should never return an empty path"),
         }
     }
     Ok(games)

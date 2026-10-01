@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::{Context, Error, Result};
 use relative_path::{RelativePath, RelativePathBuf};
@@ -26,6 +26,7 @@ pub struct GameSaveManifest {
     pub id: Uuid,
     pub definition: GameDefinition,
     pub timestamp: OffsetDateTime,
+    pub directories: HashMap<String, HashSet<RelativePathBuf>>,
     pub files: HashMap<String, HashMap<RelativePathBuf, GameSaveFileMetadata>>,
 }
 

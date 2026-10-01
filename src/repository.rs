@@ -34,10 +34,11 @@ pub enum RepositoryPathMetadata {
 
 pub trait Repository {
     fn metadata(&self, path: &RelativePath) -> Result<RepositoryPathMetadata>;
-    fn read_dir(
+    fn list_dir(
         &self,
         path: &RelativePath,
     ) -> Result<Box<dyn Iterator<Item = Result<RelativePathBuf>>>>;
+    fn make_dir(&self, path: &RelativePath) -> Result<()>;
     fn read_string(&self, path: &RelativePath) -> Result<String>;
     fn write_string(&self, path: &RelativePath, content: &str) -> Result<()>;
     fn download_file(&self, repository_path: &RelativePath, local_path: &Path) -> Result<()>;
@@ -50,11 +51,15 @@ impl Repository for Box<dyn Repository> {
         self.deref().metadata(path)
     }
 
-    fn read_dir(
+    fn list_dir(
         &self,
         path: &RelativePath,
     ) -> Result<Box<dyn Iterator<Item = Result<RelativePathBuf>>>> {
-        self.deref().read_dir(path)
+        self.deref().list_dir(path)
+    }
+
+    fn make_dir(&self, path: &RelativePath) -> Result<()> {
+        self.deref().make_dir(path)
     }
 
     fn read_string(&self, path: &RelativePath) -> Result<String> {
@@ -110,7 +115,7 @@ pub fn prepare_repository(config: &Option<AnyRepositoryConfig>) -> Result<()> {
         repository.metadata(RelativePath::new(REPOSITORY_FILE))?,
         RepositoryPathMetadata::File
     ) {
-        if repository.read_dir(RelativePath::new(""))?.next().is_some() {
+        if repository.list_dir(RelativePath::new(""))?.next().is_some() {
             return Result::Err(Error::msg(format!("Repository {config} should be empty")));
         }
         repository

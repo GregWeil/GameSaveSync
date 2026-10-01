@@ -14,10 +14,7 @@ pub struct GameState {
 
 pub fn read_game_state(repository: &impl Repository, game: &str) -> Result<GameState> {
     let path = RelativePath::new(&game).join(STATE_FILE);
-    if !matches!(
-        repository.metadata(&path)?,
-        RepositoryPathMetadata::Directory
-    ) {
+    if !matches!(repository.metadata(&path)?, RepositoryPathMetadata::File) {
         return Ok(GameState { current: None });
     }
     let file = repository
