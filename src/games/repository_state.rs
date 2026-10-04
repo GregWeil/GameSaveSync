@@ -7,15 +7,18 @@ use crate::repository::{Repository, RepositoryPathMetadata};
 
 const STATE_FILE: &str = "state.toml";
 
-#[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
-pub struct GameState {
+#[derive(PartialEq, Serialize, Deserialize, Debug)]
+pub struct RepositoryGameState {
     pub current: Option<Uuid>,
 }
 
-pub fn read_game_state(repository: &impl Repository, game: &str) -> Result<GameState> {
+pub fn read_repository_game_state(
+    repository: &impl Repository,
+    game: &str,
+) -> Result<RepositoryGameState> {
     let path = RelativePath::new(&game).join(STATE_FILE);
     if !matches!(repository.metadata(&path)?, RepositoryPathMetadata::File) {
-        return Ok(GameState { current: None });
+        return Ok(RepositoryGameState { current: None });
     }
     let file = repository
         .read_string(&path)
@@ -25,7 +28,11 @@ pub fn read_game_state(repository: &impl Repository, game: &str) -> Result<GameS
     Ok(state)
 }
 
-pub fn write_game_state(state: &GameState, repository: &impl Repository, game: &str) -> Result<()> {
+pub fn write_repository_game_state(
+    state: &RepositoryGameState,
+    repository: &impl Repository,
+    game: &str,
+) -> Result<()> {
     let path = RelativePath::new(game).join(STATE_FILE);
     match path.parent() {
         Some(dir) => match repository.metadata(&dir)? {

@@ -24,10 +24,9 @@ pub fn show(args: &ShowArgs) -> Result<()> {
     } else {
         println!("Save Paths:");
         for path in definition.paths {
-            println!("\t{}", path.path);
             match paths::rewrite_path(&path.path) {
-                Ok(rewritten) => println!("\t\t➙ {}", rewritten.display()),
-                Err(error) => println!("\t\t× {}", error),
+                Ok(rewritten) => println!("\t{} ➙ {}", path.path, rewritten.display()),
+                Err(error) => println!("\t{} × {}", path.path, error),
             }
         }
     }

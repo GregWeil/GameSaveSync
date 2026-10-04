@@ -9,7 +9,12 @@ use relative_path::{PathExt, RelativePath, RelativePathBuf};
 use time::{OffsetDateTime, UtcDateTime};
 use uuid::Uuid;
 
-use crate::games::state::{GameState, read_game_state, write_game_state};
+use crate::games::local_state::{
+    read_local_game_state, write_local_game_apply, write_local_game_store, write_local_game_synced,
+};
+use crate::games::repository_state::{
+    RepositoryGameState, read_repository_game_state, write_repository_game_state,
+};
 use crate::{
     games::{
         definition::{GameDefinition, list_definitions, load_definition},
@@ -69,8 +74,13 @@ enum SyncDirection {
 
 #[derive(Debug, PartialEq)]
 enum SyncDetermination {
+    InSync,
     Automatic(SyncDirection),
-    Conflict(String, Option<UtcDateTime>, OffsetDateTime),
+    Conflict {
+        message: String,
+        local_last_mod: Option<UtcDateTime>,
+        repository_synced: OffsetDateTime,
+    },
 }
 
 fn sync_game(game: &str, repository: &impl Repository, args: &SyncArgs) -> Result<()> {
@@ -78,7 +88,7 @@ fn sync_game(game: &str, repository: &impl Repository, args: &SyncArgs) -> Resul
     let game = &definition.name; // fixes casing or other formatting
     println!("Checking {}", game);
     let local_save = get_local_save(&definition)?;
-    let repository_state = match read_game_state(repository, game)?.current {
+    let repository_state = match read_repository_game_state(repository, game)?.current {
         Some(manifest_id) => match read_repository_manifest(repository, game, &manifest_id)? {
             Some(manifest) => Some((get_manifest_save(&manifest)?, manifest)),
             None => None,
@@ -89,17 +99,28 @@ fn sync_game(game: &str, repository: &impl Repository, args: &SyncArgs) -> Resul
         Some(manifest) => Some((get_manifest_save(&manifest)?, manifest)),
         None => None,
     };
-    let sync_direction = determine_sync_direction(
+    let sync_determination = determine_sync_direction(
         &definition,
         &local_save,
         &synced_state,
         &repository_state,
         &args,
     )?;
-    let sync_direction = match sync_direction {
+    let sync_direction = match &sync_determination {
+        SyncDetermination::InSync => &SyncDirection::DoNothing,
         SyncDetermination::Automatic(direction) => direction,
-        SyncDetermination::Conflict(message, local_last_mod, repository_synced) => {
-            conflict_prompt(&message, local_last_mod, repository_synced)?
+        SyncDetermination::Conflict {
+            message,
+            local_last_mod,
+            repository_synced,
+        } => {
+            let local_state = read_local_game_state(&game)?;
+            &conflict_prompt(
+                &message,
+                &local_last_mod,
+                &repository_synced,
+                &local_state.last_synced,
+            )?
         }
     };
     match sync_direction {
@@ -120,6 +141,9 @@ fn sync_game(game: &str, repository: &impl Repository, args: &SyncArgs) -> Resul
         }
         SyncDirection::DoNothing => {
             println!("- Taking no action");
+            if matches!(sync_determination, SyncDetermination::InSync) {
+                write_local_game_synced(&game)?;
+            }
         }
     }
     Ok(())
@@ -133,55 +157,44 @@ fn determine_sync_direction(
     args: &SyncArgs,
 ) -> Result<SyncDetermination> {
     if args.force_store && args.force_apply {
-        print!("- Unable to simultaneously force-store and force-apply");
-        return Ok(SyncDetermination::Automatic(SyncDirection::DoNothing));
+        return Err(Error::msg(
+            "unable to simultaneously force-store and force-apply",
+        ));
     }
     if args.force_store {
         return Ok(SyncDetermination::Automatic(SyncDirection::ToRepository));
     }
     if args.force_apply {
-        match repository_state {
-            Some(_) => {
-                return Ok(SyncDetermination::Automatic(SyncDirection::FromRepository));
-            }
-            None => {
-                print!("- No save in repository to apply");
-                return Ok(SyncDetermination::Automatic(SyncDirection::DoNothing));
-            }
-        }
+        return match repository_state {
+            Some(_) => Ok(SyncDetermination::Automatic(SyncDirection::FromRepository)),
+            None => Err(Error::msg("no save in repository to force-apply")),
+        };
     }
     let direction = match repository_state {
         Some((repository_save, repository_manifest)) => match synced_state {
-            Some((synced_save, synced_manifest)) => {
+            Some((synced_save, _)) => {
                 let local_changed = !saves_are_equal(&local_save, &synced_save);
                 let repository_changed = !saves_are_equal(&synced_save, &repository_save);
                 match (local_changed, repository_changed) {
-                    (true, true) => {
-                        let local_last_mod =
-                            local_save.files.values().map(|file| file.2.modified).max();
-                        SyncDetermination::Conflict(
-                            format!(
-                                "{} has changed here and in the repository (last synced at {})",
-                                &definition.name, &synced_manifest.timestamp
-                            ),
-                            local_last_mod,
-                            repository_manifest.timestamp,
-                        )
-                    }
+                    (true, true) => SyncDetermination::Conflict {
+                        message: format!(
+                            "{} has changed here and in the repository",
+                            &definition.name
+                        ),
+                        local_last_mod: local_save.files.values().map(|file| file.2.modified).max(),
+                        repository_synced: repository_manifest.timestamp,
+                    },
                     (true, false) => SyncDetermination::Automatic(SyncDirection::ToRepository),
                     (false, true) => SyncDetermination::Automatic(SyncDirection::FromRepository),
-                    (false, false) => SyncDetermination::Automatic(SyncDirection::DoNothing),
+                    (false, false) => SyncDetermination::InSync,
                 }
             }
             // No local manifest
-            None => {
-                let local_last_mod = local_save.files.values().map(|file| file.2.modified).max();
-                SyncDetermination::Conflict(
-                    format!("{} has not been synced to this device", &definition.name),
-                    local_last_mod,
-                    repository_manifest.timestamp,
-                )
-            }
+            None => SyncDetermination::Conflict {
+                message: format!("{} has not been synced to this device", &definition.name),
+                local_last_mod: local_save.files.values().map(|file| file.2.modified).max(),
+                repository_synced: repository_manifest.timestamp,
+            },
         },
         // No repository manifest
         None => SyncDetermination::Automatic(SyncDirection::ToRepository),
@@ -203,15 +216,20 @@ impl std::fmt::Display for ConflictChoice {
 
 fn conflict_prompt(
     message: &str,
-    local_last_mod: Option<UtcDateTime>,
-    repository_synced: OffsetDateTime,
+    local_last_mod: &Option<UtcDateTime>,
+    repository_synced: &OffsetDateTime,
+    last_synced: &Option<OffsetDateTime>,
 ) -> Result<SyncDirection> {
     let offset = match time::UtcOffset::current_local_offset() {
         Ok(local_offset) => local_offset,
         Err(_) => repository_synced.offset(),
     };
+    let message = match last_synced {
+        Some(last_synced) => format!("{message} (last synced {})", last_synced.to_offset(offset)),
+        None => message.to_owned(),
+    };
     let choice = inquire::Select::new(
-        message,
+        &message,
         vec![
             ConflictChoice {
                 sync_direction: SyncDirection::DoNothing,
@@ -219,14 +237,13 @@ fn conflict_prompt(
             },
             ConflictChoice {
                 sync_direction: SyncDirection::ToRepository,
-                label: format!(
-                    "Keep local device save{}",
-                    match local_last_mod {
-                        Some(local_last_mod) =>
-                            format!(" (modified {})", local_last_mod.to_offset(offset)),
-                        None => "".into(),
-                    }
-                ),
+                label: match local_last_mod {
+                    Some(local_last_mod) => format!(
+                        "Keep local device save (modified {})",
+                        local_last_mod.to_offset(offset)
+                    ),
+                    None => "Keep local device save".to_owned(),
+                },
             },
             ConflictChoice {
                 sync_direction: SyncDirection::FromRepository,
@@ -248,6 +265,9 @@ fn sync_game_to_repository(
     repository: &impl Repository,
     args: &SyncArgs,
 ) -> Result<()> {
+    if !args.dry_run {
+        write_local_game_store(&definition.name)?;
+    }
     let manifest_id = Uuid::new_v4();
     let save_path = RelativePath::new(&definition.name).join(manifest_id.to_string());
     repository
@@ -289,10 +309,10 @@ fn sync_game_to_repository(
         files,
     };
     if !args.dry_run {
-        let old_state = read_game_state(repository, &definition.name)?;
+        let old_state = read_repository_game_state(repository, &definition.name)?;
         write_repository_manifest(&manifest, repository)?;
-        write_game_state(
-            &GameState {
+        write_repository_game_state(
+            &RepositoryGameState {
                 current: Some(manifest_id),
             },
             repository,
@@ -305,6 +325,7 @@ fn sync_game_to_repository(
             }
             None => {}
         }
+        write_local_game_synced(&definition.name)?;
     }
     Ok(())
 }
@@ -316,6 +337,9 @@ fn sync_game_from_repository(
     args: &SyncArgs,
 ) -> Result<()> {
     let game = &manifest.definition.name;
+    if !args.dry_run {
+        write_local_game_apply(&game, &manifest.id)?;
+    }
     for path in &manifest.definition.paths {
         let path = rewrite_path(&path.path)?;
         if repository_save.files.contains_key(&path) {
@@ -376,13 +400,8 @@ fn sync_game_from_repository(
         }
     }
     if !args.dry_run {
-        write_synced_manifest(&GameSaveManifest {
-            id: manifest.id,
-            definition: manifest.definition.clone(),
-            timestamp: time::OffsetDateTime::now_local()?,
-            directories: manifest.directories.clone(),
-            files: manifest.files.clone(),
-        })?;
+        write_synced_manifest(&manifest)?;
+        write_local_game_synced(&game)?;
     }
     Ok(())
 }

@@ -50,7 +50,14 @@ fn test_determine_sync_direction_not_yet_synced() -> Result<()> {
         &Some((repository_files, repository_manifest)),
         &args,
     )?;
-    assert!(matches!(result, SyncDetermination::Conflict(_, _, _)));
+    assert!(matches!(
+        result,
+        SyncDetermination::Conflict {
+            message: _,
+            local_last_mod: _,
+            repository_synced: _
+        }
+    ));
     Ok(())
 }
 
@@ -78,10 +85,7 @@ fn test_determine_sync_direction_nothing_changed() -> Result<()> {
         &Some((repository_files, repository_manifest)),
         &args,
     )?;
-    assert_eq!(
-        result,
-        SyncDetermination::Automatic(SyncDirection::DoNothing)
-    );
+    assert_eq!(result, SyncDetermination::InSync);
     Ok(())
 }
 
@@ -180,7 +184,14 @@ fn test_determine_sync_direction_both_changed() -> Result<()> {
         &Some((repository_files, repository_manifest)),
         &args,
     )?;
-    assert!(matches!(result, SyncDetermination::Conflict(_, _, _)));
+    assert!(matches!(
+        result,
+        SyncDetermination::Conflict {
+            message: _,
+            local_last_mod: _,
+            repository_synced: _
+        }
+    ));
     Ok(())
 }
 
