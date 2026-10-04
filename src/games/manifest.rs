@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::{
     repository::{Repository, RepositoryPathMetadata},
-    utils::paths::data_dir,
+    utils::paths::state_dir,
 };
 
 use super::definition::GameDefinition;
@@ -78,7 +78,7 @@ pub fn write_repository_manifest(
 }
 
 pub fn read_synced_manifest(game: &str) -> Result<Option<GameSaveManifest>> {
-    let path = data_dir()?.join(&game).join(MANIFEST_FILE);
+    let path = state_dir()?.join(&game).join(MANIFEST_FILE);
     if !path.is_file() {
         return Ok(None);
     }
@@ -90,7 +90,7 @@ pub fn read_synced_manifest(game: &str) -> Result<Option<GameSaveManifest>> {
 }
 
 pub fn write_synced_manifest(manifest: &GameSaveManifest) -> Result<()> {
-    let path = data_dir()?
+    let path = state_dir()?
         .join(&manifest.definition.name)
         .join(MANIFEST_FILE);
     match path.parent() {

@@ -4,10 +4,8 @@ use anyhow::{Error, Result};
 use directories::ProjectDirs;
 
 fn project_dirs() -> Result<ProjectDirs> {
-    match ProjectDirs::from("org", "GameSaveSync", "GameSaveSync") {
-        Some(dirs) => Ok(dirs),
-        None => Result::Err(Error::msg("did not get project directories")),
-    }
+    ProjectDirs::from("org", "GameSaveSync", "GameSaveSync")
+        .ok_or_else(|| Error::msg("did not get project directories"))
 }
 
 pub fn config_dir() -> Result<PathBuf> {
@@ -16,9 +14,9 @@ pub fn config_dir() -> Result<PathBuf> {
     Ok(path.to_path_buf())
 }
 
-pub fn data_dir() -> Result<PathBuf> {
+pub fn state_dir() -> Result<PathBuf> {
     let dirs = project_dirs()?;
-    let path = dirs.data_local_dir();
+    let path = dirs.state_dir().unwrap_or_else(|| dirs.data_local_dir());
     Ok(path.to_path_buf())
 }
 

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
-use crate::utils::paths::data_dir;
+use crate::utils::paths::state_dir;
 
 const STATE_FILE: &str = "state.toml";
 
@@ -26,7 +26,7 @@ pub struct LocalGameState {
 }
 
 pub fn read_local_game_state(game: &str) -> Result<LocalGameState> {
-    let path = data_dir()?.join(&game).join(STATE_FILE);
+    let path = state_dir()?.join(&game).join(STATE_FILE);
     if !path.is_file() {
         return Ok(LocalGameState {
             last_synced: None,
@@ -41,7 +41,7 @@ pub fn read_local_game_state(game: &str) -> Result<LocalGameState> {
 }
 
 fn write_local_game_state(game: &str, state: &LocalGameState) -> Result<()> {
-    let path = data_dir()?.join(&game).join(STATE_FILE);
+    let path = state_dir()?.join(&game).join(STATE_FILE);
     match path.parent() {
         Some(dir) => std::fs::create_dir_all(dir)
             .with_context(|| "failed to create local state directory")?,

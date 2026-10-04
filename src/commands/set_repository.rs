@@ -20,15 +20,11 @@ pub fn set_repository(args: &SetRepositoryArgs) -> Result<()> {
         repository::local_repository::LocalRepositoryConfig { path },
     );
     match config.repository {
-        Some(ref repository) => {
-            println!(
-                "Changing repository from {} to {}",
-                repository, new_repository
-            );
-        }
-        None => {
-            println!("Setting repository to {}", new_repository);
-        }
+        Some(ref repository) => println!(
+            "Changing repository from {} to {}",
+            repository, new_repository
+        ),
+        None => println!("Setting repository to {}", new_repository),
     }
     config.repository = Some(new_repository);
     repository::prepare_repository(&config.repository)?;
