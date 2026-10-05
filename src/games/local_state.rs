@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use uuid::Uuid;
@@ -83,4 +84,31 @@ pub fn write_local_game_apply(game: &str, manifest_id: &Uuid) -> Result<()> {
         }),
     };
     write_local_game_state(&game, &new_state)
+}
+
+pub fn print_pending_action_warning(pending_action: &Option<PendingSyncAction>, prefix: &str) {
+    match &pending_action {
+        Some(PendingSyncAction::Store { start_time }) => {
+            println!(
+                "{prefix}{}, the sync started at {start_time}",
+                "The last sync never finished storing a save".yellow()
+            );
+        }
+        Some(PendingSyncAction::Apply {
+            start_time,
+            manifest_id: _,
+        }) => {
+            println!(
+                "{prefix}{}, the sync started at {start_time}",
+                "The last sync never finished applying a save".yellow()
+            );
+            println!(
+                "{prefix}{}",
+                "This device might have an incomplete save after a failed sync"
+                    .red()
+                    .bold()
+            );
+        }
+        None => {}
+    };
 }

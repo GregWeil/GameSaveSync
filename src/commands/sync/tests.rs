@@ -17,7 +17,7 @@ fn test_determine_sync_direction_empty_repository() -> Result<()> {
         force_store: false,
         force_apply: false,
     };
-    let result = determine_sync_direction(&definition, &files, &None, &None, &args)?;
+    let result = determine_sync_direction(&definition, &files, &None, &None, &None, &args)?;
     assert_eq!(
         result,
         SyncDetermination::Automatic(SyncDirection::ToRepository)
@@ -48,6 +48,7 @@ fn test_determine_sync_direction_not_yet_synced() -> Result<()> {
         &local_files,
         &None,
         &Some((repository_files, repository_manifest)),
+        &None,
         &args,
     )?;
     assert!(matches!(
@@ -83,6 +84,7 @@ fn test_determine_sync_direction_nothing_changed() -> Result<()> {
         &local_files,
         &Some((synced_files, synced_manifest)),
         &Some((repository_files, repository_manifest)),
+        &None,
         &args,
     )?;
     assert_eq!(result, SyncDetermination::InSync);
@@ -114,6 +116,7 @@ fn test_determine_sync_direction_local_changed() -> Result<()> {
         &local_files,
         &Some((synced_files, synced_manifest)),
         &Some((repository_files, repository_manifest)),
+        &None,
         &args,
     )?;
     assert_eq!(
@@ -148,6 +151,7 @@ fn test_determine_sync_direction_repository_changed() -> Result<()> {
         &local_files,
         &Some((synced_files, synced_manifest)),
         &Some((repository_files, repository_manifest)),
+        &None,
         &args,
     )?;
     assert_eq!(
@@ -182,6 +186,50 @@ fn test_determine_sync_direction_both_changed() -> Result<()> {
         &local_files,
         &Some((synced_files, synced_manifest)),
         &Some((repository_files, repository_manifest)),
+        &None,
+        &args,
+    )?;
+    assert!(matches!(
+        result,
+        SyncDetermination::Conflict {
+            message: _,
+            local_last_mod: _,
+            repository_synced: _
+        }
+    ));
+    Ok(())
+}
+
+#[test]
+fn test_determine_sync_direction_failed_apply() -> Result<()> {
+    let definition = make_definition()?;
+    let date = Date::from_calendar_date(2026, Month::August, 4)?
+        .midnight()
+        .as_utc();
+    let local_date = Date::from_calendar_date(2026, Month::August, 5)?
+        .midnight()
+        .as_utc();
+    let local_files = make_save("game.sav", 123, local_date)?;
+    let synced_files = make_save("game.sav", 123, date)?;
+    let synced_manifest = make_manifest(&definition, &synced_files)?;
+    let repository_files = make_save("game.sav", 123, date)?;
+    let repository_manifest = make_manifest(&definition, &repository_files)?;
+    let args = SyncArgs {
+        game: None,
+        dry_run: true,
+        force_store: false,
+        force_apply: false,
+    };
+    let pending_action = PendingSyncAction::Apply {
+        start_time: OffsetDateTime::now_utc(),
+        manifest_id: Uuid::new_v4(),
+    };
+    let result = determine_sync_direction(
+        &definition,
+        &local_files,
+        &Some((synced_files, synced_manifest)),
+        &Some((repository_files, repository_manifest)),
+        &Some(pending_action),
         &args,
     )?;
     assert!(matches!(
@@ -220,6 +268,7 @@ fn test_determine_sync_direction_force_store() -> Result<()> {
         &local_files,
         &Some((synced_files, synced_manifest)),
         &Some((repository_files, repository_manifest)),
+        &None,
         &args,
     )?;
     assert_eq!(
@@ -254,6 +303,7 @@ fn test_determine_sync_direction_force_apply() -> Result<()> {
         &local_files,
         &Some((synced_files, synced_manifest)),
         &Some((repository_files, repository_manifest)),
+        &None,
         &args,
     )?;
     assert_eq!(
